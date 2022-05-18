@@ -17,31 +17,14 @@ ALTER TABLE student
 --       Оформить выдачу данных с использованием VIEW
 CREATE VIEW student_grades AS
     SELECT
-           student.name,
-           m.mark
+        student.name,
+        mark.mark
     FROM student
-        JOIN (
-            SELECT
-                mark,
-                id_student,
-                id_lesson
-            FROM mark
-        ) m on student.id_student = m.id_student
-        JOIN (
-            SELECT
-                id_subject,
-                id_lesson
-            FROM
-                lesson
-        ) l on m.id_lesson = l.id_lesson
-        JOIN (
-            SELECT
-                name,
-                id_subject
-            FROM subject
-            WHERE
-                name = 'Информатика'
-        ) s on l.id_subject = s.id_subject
+        JOIN mark on student.id_student = mark.id_student
+        JOIN lesson on mark.id_lesson = lesson.id_lesson
+        JOIN subject on lesson.id_subject = subject.id_subject
+    WHERE
+        subject.name = "Информатика"
     ORDER BY
         student.name;
 
@@ -56,43 +39,24 @@ CREATE PROCEDURE debtors
 BEGIN
     SELECT
         debsters.name AS debster,
-        s.name AS lesson
+        subject.name
     FROM `group`
-        JOIN (
-            SELECT
-                id_group,
-                id_subject
-            FROM lesson
-        ) l on `group`.id_group = l.id_group
-        JOIN (
-            SELECT
-                id_subject,
-                name
-            FROM subject
-        ) s on s.id_subject = l.id_subject
+        JOIN lesson on `group`.id_group = lesson.id_group
+        JOIN subject on subject.id_subject = lesson.id_subject
         RIGHT JOIN (
             SELECT
                 student.name,
-                g.id_group
+                `group`.id_group
             FROM student
-                JOIN (
-                    SELECT
-                        id_group
-                    FROM `group`
-                ) g on g.id_group = student.id_group
-                LEFT JOIN (
-                    SELECT
-                        id_student,
-                        mark
-                    FROM mark
-                ) m on student.id_student = m.id_student
+                JOIN `group` on `group`.id_group = student.id_group
+                LEFT JOIN mark on student.id_student = mark.id_student
             WHERE
-                m.mark IS NULL
+                mark.mark IS NULL
         ) debsters ON debsters.id_group = `group`.id_group
     WHERE
         `group`.id_group = identify_group
     GROUP BY
-        s.name, debsters.name
+        subject.name, debsters.name
     ORDER BY debsters.name;
 END
 
@@ -103,69 +67,32 @@ CALL debstors(1);
 -- 4. Дать среднюю оценку студентов по каждому предмету для тех предметов,
 --       по которым занимается не менее 35 студентов
 SELECT
-       s2.name,
-       AVG(m.mark) AS average_rating
+    subject.name,
+    AVG(mark.mark) AS average_rating
 FROM lesson
-    JOIN (
-        SELECT
-            id_lesson,
-            id_student,
-            mark
-        FROM mark
-    ) m on lesson.id_lesson = m.id_lesson
-    JOIN (
-        SELECT
-            id_student
-        FROM student
-    ) s on m.id_student = s.id_student
-    JOIN (
-        SELECT
-            id_subject,
-            name
-        FROM subject
-    ) s2 on lesson.id_subject = s2.id_subject
+    JOIN mark on lesson.id_lesson = mark.id_lesson
+    JOIN student on mark.id_student = student.id_student
+    JOIN subject on lesson.id_subject = subject.id_subject
 GROUP BY
-    s2.name
+    subject.name
 HAVING
-    COUNT(s.id_student) >= 35;
+    COUNT(student.id_student) >= 35;
 
 
 -- 5. Дать оценки студентов специальности БИ по всем проводимым предметам
 --       с указанием группы, фамилии, предмета, даты
 --       При отсутствии оценки заполнить значениями NULL поля оценки
 SELECT
-       s.name,
-       m.mark,
-       s2.name AS lesson,
-       l.date
+    `group`.name,
+    student.name,
+    subject.name,
+    lesson.date,
+    mark.mark
 FROM `group`
-    JOIN (
-        SELECT
-            id_group,
-            id_student,
-            name
-        FROM student
-    ) s on `group`.id_group = s.id_group
-    LEFT JOIN (
-        SELECT
-            id_student,
-            id_lesson,
-            mark
-        FROM mark
-    ) m on s.id_student = m.id_student
-    LEFT JOIN (
-        SELECT
-            id_lesson,
-            id_subject,
-            date
-        FROM lesson
-    ) l on m.id_lesson = l.id_lesson
-    LEFT JOIN (
-        SELECT
-            id_subject,
-            name
-        FROM subject
-    ) s2 on l.id_subject = s2.id_subject
+    JOIN student on `group`.id_group = student.id_group
+    JOIN lesson on `group`.id_group = lesson.id_group
+    JOIN subject on lesson.id_subject = subject.id_subject
+    LEFT JOIN mark on student.id_student = mark.id_student
 WHERE
     `group`.name = 'БИ';
 
@@ -174,35 +101,20 @@ WHERE
 --       повысить эти оценки на 1 балл
 UPDATE
     mark
-    JOIN (
-        SELECT
-            id_lesson,
-            id_group,
-            date
-        FROM lesson
-        WHERE
-            lesson.date = '2019-05-12'
-    ) l on l.id_lesson = mark.id_lesson
-    JOIN (
-        SELECT
-            id_group,
-            name
-        FROM `group`
-        WHERE
-            `group`.name = 'ПС'
-    ) g on g.id_group = l.id_group
+    JOIN lesson on lesson.id_lesson = mark.id_lesson
+    JOIN subject on subject.id_subject = lesson.id_subject
+    JOIN `group` on `group`.id_group = lesson.id_group
 SET
     mark = mark + 1
 WHERE
-    mark < 5;
+    `group`.name = 'ПС' AND
+    mark < 5 AND
+    subject.name = 'БД' AND
+    lesson.date < '2019-05-12'
+;
 
 
 -- 7. Добавить необходимые индексы
-CREATE INDEX idx_student$id_group ON student (id_group ASC);
-
-CREATE INDEX idx_mark$id_student ON mark (id_student ASC);
-CREATE INDEX idx_mark$id_lesson ON mark (id_lesson ASC);
-
-CREATE INDEX idx_lesson$id_subject ON lesson (id_subject ASC);
-CREATE INDEX idx_lesson$id_teacher ON lesson (id_teacher ASC);
-CREATE INDEX idx_lesson$id_group ON lesson (id_group ASC);
+CREATE INDEX IX_group_name ON `group` (name ASC);
+CREATE INDEX IX_subject_name ON subject (name ASC);
+CREATE INDEX IX_lesson_date ON lesson (date ASC);
